@@ -2,7 +2,7 @@ const express = require('express');
 const { Prisma } = require('@prisma/client');
 const prisma = require('../_lib/prisma');
 const { sendError } = require('../_lib/errors');
-const { calculateStock, getStockMap } = require('../_lib/stock');
+const { calculateStock, getStock, getStockMap } = require('../_lib/stock');
 
 const router = express.Router();
 
@@ -59,6 +59,20 @@ router.get('/:id', async (req, res) => {
 
   const { movements, ...rest } = product;
   res.json({ ...rest, stock: calculateStock(movements), movements });
+});
+
+router.get('/:id/stock', async (req, res) => {
+  const { id } = req.params;
+
+  const product = await prisma.product.findUnique({ where: { id }, select: { id: true } });
+  if (!product) {
+    return sendError(res, 404, {
+      message: 'Product not found',
+      code: 'NOT_FOUND',
+    });
+  }
+
+  res.json({ stock: await getStock(prisma, id) });
 });
 
 router.post('/', async (req, res) => {
