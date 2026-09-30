@@ -51,8 +51,21 @@ Listens on `http://localhost:5173`. The dev server proxies `/api/*` to
 `http://localhost:3001`, so the API needs to be running too (same-origin
 relative paths, no CORS setup needed in either dev or prod).
 
-So far: the product list page (`/`) — search, low-stock filter, add-product
-form. The product detail page (`/products/:id`) is a placeholder.
+Both pages are built:
+
+- `/` — product list: search, low-stock filter, add-product form.
+- `/products/:id` — product detail: current stock, movement history
+  newest-first, and a form to record a movement. A 409 from recording an
+  "out" that exceeds stock shows the server's exact message (e.g. "Only 2
+  available"), not a generic error.
+
+Both pages refetch after a successful write (add product / record movement)
+rather than reloading the page. That refetch only replaces the data in
+place — it doesn't fall back to a full loading-state teardown, since an
+earlier version of both pages did that and it turned out to unmount the
+movement form mid-interaction (see git history / code comments in
+`ProductListPage.jsx` and `ProductDetailPage.jsx` for the "only the first
+load, not every refetch" loading-state guard this required).
 
 ## Schema
 
