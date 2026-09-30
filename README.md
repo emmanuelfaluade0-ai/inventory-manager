@@ -67,6 +67,35 @@ movement form mid-interaction (see git history / code comments in
 `ProductListPage.jsx` and `ProductDetailPage.jsx` for the "only the first
 load, not every refetch" loading-state guard this required).
 
+## Deploying to Vercel
+
+One Vercel project serves both: the root `vercel.json` builds `web/` as the
+static frontend (`buildCommand`/`outputDirectory`) and rewrites `/api/*` to
+the single Express function at `api/index.js`; everything else falls back to
+`index.html` so React Router can handle client-side routes like
+`/products/:id`.
+
+Before the first deploy, set these in the Vercel dashboard (Project Settings
+→ Environment Variables), for Production and Preview:
+
+- `DATABASE_URL` — the pooled connection string (port 6543, `pgbouncer=true`).
+  This is what the deployed app actually queries with.
+- `DIRECT_URL` — the direct connection string (port 5432). Not read by the
+  app at runtime (only `prisma migrate` uses it), but harmless to set and
+  useful if migrations ever need to run from a Vercel context later.
+
+Schema migrations are **not** run automatically as part of the Vercel build.
+Run `npx prisma migrate deploy` manually from `api/` (with `DIRECT_URL`
+pointed at the same database) whenever the schema changes, before or after
+deploying the code that depends on it.
+
+`api/package.json` has a `postinstall: prisma generate` script so the
+Prisma Client gets (re)generated wherever `npm install` runs, including on
+Vercel's build machine — and `schema.prisma`'s `binaryTargets` includes
+`rhel-openssl-3.0.x` alongside `native`, since Vercel's Node.js functions run
+on Amazon Linux, not whatever OS you developed on. Skipping either of these
+is a common way a Prisma+Vercel deploy builds fine but crashes at runtime.
+
 ## Schema
 
 Two models: `Product` (sku, name, reorderThreshold) and `Movement`
