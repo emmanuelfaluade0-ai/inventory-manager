@@ -6,6 +6,15 @@ const { calculateStock, getStockMap } = require('../_lib/stock');
 
 const router = express.Router();
 
+class NotFoundError extends Error {}
+
+class InsufficientStockError extends Error {
+  constructor(available) {
+    super('Insufficient stock');
+    this.available = available;
+  }
+}
+
 router.get('/', async (req, res) => {
   const { search, lowStock } = req.query;
 
@@ -90,6 +99,75 @@ router.post('/', async (req, res) => {
         message: `SKU "${sku.trim()}" is already in use`,
         field: 'sku',
         code: 'DUPLICATE_SKU',
+      });
+    }
+    throw err;
+  }
+});
+
+router.post('/:id/movements', async (req, res) => {
+  const { id } = req.params;
+  const { type, quantity, note } = req.body ?? {};
+
+  if (type !== 'in' && type !== 'out') {
+    return sendError(res, 400, {
+      message: 'type must be "in" or "out"',
+      field: 'type',
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return sendError(res, 400, {
+      message: 'quantity is required and must be a positive integer',
+      field: 'quantity',
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (note !== undefined && note !== null && typeof note !== 'string') {
+    return sendError(res, 400, {
+      message: 'note must be a string',
+      field: 'note',
+      code: 'VALIDATION_ERROR',
+    });
+  }
+  const noteValue = typeof note === 'string' && note.trim() !== '' ? note.trim() : null;
+
+  try {
+    const movement = await prisma.$transaction(async (tx) => {
+      if (type === 'out') {
+        // Lock the product row so a second concurrent "out" request has to
+        // wait for this transaction to commit before it can re-read stock.
+        const locked = await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+        if (locked.length === 0) throw new NotFoundError();
+
+        const movements = await tx.movement.findMany({
+          where: { productId: id },
+          select: { type: true, quantity: true },
+        });
+        const available = calculateStock(movements);
+        if (quantity > available) throw new InsufficientStockError(available);
+      } else {
+        const product = await tx.product.findUnique({ where: { id }, select: { id: true } });
+        if (!product) throw new NotFoundError();
+      }
+
+      return tx.movement.create({
+        data: { productId: id, type, quantity, note: noteValue },
+      });
+    }, { maxWait: 10000, timeout: 10000 });
+
+    res.status(201).json(movement);
+  } catch (err) {
+    if (err instanceof NotFoundError) {
+      return sendError(res, 404, { message: 'Product not found', code: 'NOT_FOUND' });
+    }
+    if (err instanceof InsufficientStockError) {
+      return sendError(res, 409, {
+        message: `Only ${err.available} available`,
+        available: err.available,
+        code: 'INSUFFICIENT_STOCK',
       });
     }
     throw err;
