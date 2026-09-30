@@ -33,9 +33,26 @@ npm run dev
 
 Listens on `http://localhost:3001` by default (`PORT` env var to override).
 
+Note: a fresh connection to Supabase's pooled endpoint can take a few
+seconds to establish (observed 2-6s on the first request after the API
+starts or sits idle). Later requests are fast. This is network/infra
+latency, not application code — the UI's loading state covers it, but
+don't mistake the first request of a session for something hanging.
+
 ### Frontend
 
-Not built yet.
+```
+cd web
+npm install
+npm run dev
+```
+
+Listens on `http://localhost:5173`. The dev server proxies `/api/*` to
+`http://localhost:3001`, so the API needs to be running too (same-origin
+relative paths, no CORS setup needed in either dev or prod).
+
+So far: the product list page (`/`) — search, low-stock filter, add-product
+form. The product detail page (`/products/:id`) is a placeholder.
 
 ## Schema
 
