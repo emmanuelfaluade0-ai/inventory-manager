@@ -168,9 +168,74 @@ from the start, it just needed enough headroom to wait its turn.)
 
 ## Deliberate scope cuts
 
-_Filled in as the build progresses — see the final version of this section
-for the complete list._
+- **Auth.** No login, no API keys — anything with the URL can hit every
+  endpoint. Fine for a take-home against a scratch database, not fine for
+  anything real.
+- **Pagination.** `GET /api/products` returns every matching row in one
+  response. Search narrows it, but there's no limit/offset or cursor —
+  it'll get slow (and the response payload large) once the table has
+  thousands of rows.
+- **Editing product metadata.** No `PATCH`, no edit form. A typo'd name or
+  wrong reorder threshold at creation time is permanent short of touching
+  the database directly.
+- **Deleting products.** No `DELETE` endpoint either. Combined with no
+  editing, a product created by mistake just sits there forever.
+- **Editing or deleting movements.** This one isn't a time cut, it's the
+  point of the design — movements are append-only by construction (see "the
+  one rule that matters" at the top). Worth listing anyway so it's clear
+  it's deliberate, not an oversight.
+- **Automated test suite beyond the stock helper.** `api/_lib/stock.test.js`
+  is real, committed, repeatable unit coverage. Everything else —
+  the endpoint behavior (all 5, including the concurrency test), and every
+  UI flow (add product, duplicate-SKU error, search, low-stock filter,
+  record movement, overdraw rejection, 404 handling) — was verified with
+  scripts written, run, and deleted during development, not checked in as
+  a suite. It caught real bugs (the race-condition 500, the form-remount
+  bug) but none of it runs again on the next change.
+- **UI polish.** No loading skeletons, no transition/animation on state
+  changes, no toasts, no dark mode. Functional and consistent, not refined.
+  Also never tested at a narrow/mobile viewport width — the CSS is
+  reasonably simple so it likely mostly works, but "likely" isn't "checked."
+- **Filter state isn't in the URL.** Search text and the low-stock toggle
+  live in component state only. Refresh the list page or share its link and
+  the filters reset — no back/forward support for them either.
+- **No automatic retry for the Supabase connection latency.** We hit real,
+  repeated multi-second connection blips against the pooled connection
+  during development (documented above). The app surfaces these correctly
+  as an error state with a manual Retry button, but doesn't retry
+  automatically with backoff — a user has to notice and click.
+- **Optimistic UI.** Both forms wait for the server round-trip (write, then
+  a refetch) before updating anything. Explicitly allowed as a cut by the
+  spec, and simpler to get right under time pressure than optimistic
+  updates with rollback-on-failure.
 
 ## What I'd do with more time
 
-_To be filled in._
+In roughly the order I'd tackle them:
+
+1. **Automatic retry with backoff for transient connection errors.** Not
+   hypothetical — this is the one issue on this list I actually hit
+   repeatedly while building, against this exact database. A few retries
+   with backoff before surfacing the error state would paper over most of
+   what I saw, and it's a contained change (wrap the fetch layer, not a
+   redesign).
+2. **A real, committed test suite.** The manual verification worked, but
+   "worked once, script deleted" isn't a safety net for the next change.
+   I'd add integration tests for the endpoints (supertest against the
+   Express app, particularly the concurrency test — that one's too
+   valuable to only run by hand) and a small Playwright suite for the two
+   UI flows that matter most: add-product-with-duplicate-SKU and
+   record-movement-with-overdraw.
+3. **Pagination on the product list.** The most likely of the "won't scale"
+   cuts to actually matter, and it's a natural extension of the
+   search/lowStock query-param pattern already in place rather than a new
+   architecture.
+4. **Edit and delete for products.** Straightforward CRUD completeness —
+   lower priority than the above because the current schema/data model
+   doesn't need to change for it, so it's cheap to add later without
+   revisiting anything already built.
+
+Auth is real work I'd want before this touched anything that mattered, but
+I'd put it after the above for a project at this stage — there's no
+multi-user data to protect yet, and it's a bigger, more architecturally
+invasive change than the others.
