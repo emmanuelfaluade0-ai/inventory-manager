@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Product {
+  id               String     @id @default(uuid())
+  sku              String     @unique
+  name             String
+  reorderThreshold Int
+  createdAt        DateTime   @default(now())
+  movements        Movement[]
+}
+
+model Movement {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  type      String   // "in" | "out" — enforced at app level and DB CHECK constraint
+  quantity  Int
+  note      String?
+  createdAt DateTime @default(now())
+}
