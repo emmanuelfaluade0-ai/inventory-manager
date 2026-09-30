@@ -2,8 +2,36 @@ const express = require('express');
 const { Prisma } = require('@prisma/client');
 const prisma = require('../_lib/prisma');
 const { sendError } = require('../_lib/errors');
+const { getStockMap } = require('../_lib/stock');
 
 const router = express.Router();
+
+router.get('/', async (req, res) => {
+  const { search, lowStock } = req.query;
+
+  const where = {};
+  if (typeof search === 'string' && search.trim() !== '') {
+    const term = search.trim();
+    where.OR = [
+      { name: { contains: term, mode: 'insensitive' } },
+      { sku: { contains: term, mode: 'insensitive' } },
+    ];
+  }
+
+  const products = await prisma.product.findMany({ where, orderBy: { name: 'asc' } });
+  const stockMap = await getStockMap(prisma, products.map((product) => product.id));
+
+  let results = products.map((product) => ({
+    ...product,
+    stock: stockMap.get(product.id) ?? 0,
+  }));
+
+  if (lowStock === 'true') {
+    results = results.filter((product) => product.stock <= product.reorderThreshold);
+  }
+
+  res.json(results);
+});
 
 router.post('/', async (req, res) => {
   const { name, sku, reorderThreshold } = req.body ?? {};
