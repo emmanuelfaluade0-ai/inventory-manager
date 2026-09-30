@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "node --env-file=.env app.js",
     "test": "node --test"
   },
   "keywords": [],
@@ -12,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "6.19.3",
+    "express": "5.2.1",
     "prisma": "6.19.3"
   }
 }
